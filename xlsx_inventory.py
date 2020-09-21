@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import json
 import os
@@ -39,34 +39,6 @@ def main():
     config = load_config(config_path)
     try:
         wb = load_workbook(config["xlsx_inventory_file"])
-        sheet = wb[config["sheet"]] if "sheet" in config else wb.active
-        inventory = sheet_to_inventory(
-            group_by_col=config["group_by_col"],
-            hostname_col=config["hostname_col"],
-            sheet=sheet,
-        )
-        if args.list:
-            print(json.dumps(inventory, indent=4, sort_keys=True, default=str))
-        if args.config:
-            create_config(
-                filename=args.file,
-                group_by_col=args.group_by_col,
-                hostname_col=args.hostname_col,
-                sheet=args.sheet,
-            )
-        elif args.host:
-            try:
-                print(
-                    json.dumps(
-                        inventory["_meta"]["hostvars"][args.host],
-                        indent=4,
-                        sort_keys=True,
-                        default=str,
-                    )
-                )
-            except KeyError as e:
-                print('\033[91mHost "%s" not Found!\033[0m' % e)
-                print(e)
     except FileNotFoundError as e:
         print(
             "\033[91mFile Not Found! Check %s configuration file!"
@@ -74,6 +46,9 @@ def main():
         )
         print(e)
         exit(1)
+
+    try:
+        sheet = wb[ config["sheet"].strip('"') ] if "sheet" in config else wb.active
     except KeyError as e:
         print(
             "\033[91mKey Error! Check %s configuration file! Is the `sheet` name setting correct?\033[0m"
@@ -81,6 +56,36 @@ def main():
         )
         print(e)
         exit(1)
+
+    inventory = sheet_to_inventory(
+        group_by_col=config["group_by_col"],
+        hostname_col=config["hostname_col"],
+        sheet=sheet,
+    )
+    if args.list:
+        print(json.dumps(inventory, indent=4, sort_keys=True, default=str))
+    if args.config:
+        create_config(
+            filename=args.file,
+            group_by_col=args.group_by_col,
+            hostname_col=args.hostname_col,
+            sheet=args.sheet,
+        )
+    elif args.host:
+        try:
+            print(
+                json.dumps(
+                    inventory["_meta"]["hostvars"][args.host],
+                    indent=4,
+                    sort_keys=True,
+                    default=str,
+                )
+            )
+        except KeyError as e:
+            print('\033[91mHost "%s" not Found!\033[0m' % e)
+            print(e)
+
+
     exit(0)
 
 
@@ -165,7 +170,7 @@ def sheet_to_inventory(group_by_col, hostname_col, sheet):
                 if var_name.value is None:
                     var_name.value = "xlsx_" + var_name.coordinate
                 if row[idx].value is not None:
-                    groups["_meta"]["hostvars"][row[0].value][
+                    groups["_meta"]["hostvars"][row[hostname_col].value][
                         var_name.value.lower().replace(" ", "_")
                     ] = row[idx].value
 
@@ -174,3 +179,5 @@ def sheet_to_inventory(group_by_col, hostname_col, sheet):
 
 if __name__ == "__main__":
     main()
+
+
