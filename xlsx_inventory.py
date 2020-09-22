@@ -60,6 +60,7 @@ def main():
     inventory = sheet_to_inventory(
         group_by_col=config["group_by_col"],
         hostname_col=config["hostname_col"],
+        ip_col=config.get("ip_col", None),
         sheet=sheet,
     )
     if args.list:
@@ -136,12 +137,15 @@ def parse_args():
         "--hostname-col", default=None, help="Column containing the hostnames"
     )
     arg_parser.add_argument(
+        "--ip-col", default=None, help="Column containing the host ip. (Optional)"
+    )
+    arg_parser.add_argument(
         "--sheet", default=None, help="Name of the Sheet, used by xlsx_inventory.py"
     )
     return arg_parser.parse_args()
 
 
-def sheet_to_inventory(group_by_col, hostname_col, sheet):
+def sheet_to_inventory(group_by_col, hostname_col, ip_col, sheet):
     if isinstance(group_by_col, six.string_types):
         group_by_col = (
             column_index_from_string(coordinate_from_string(group_by_col + "1")[0]) - 1
@@ -150,27 +154,36 @@ def sheet_to_inventory(group_by_col, hostname_col, sheet):
         hostname_col = (
             column_index_from_string(coordinate_from_string(hostname_col + "1")[0]) - 1
         )
-
+    if isinstance(ip_col, six.string_types):
+        ip_col = (
+            column_index_from_string(coordinate_from_string(ip_col + "1")[0]) - 1
+        )
     groups = {"_meta": {"hostvars": {}}}
     rows = list(sheet.rows)
 
     for row in rows[1:]:
         host = row[hostname_col].value
-        if host is None:
+        if host is None or len(host) == 0:
             continue
+        if ip_col:
+            ip = { "ansible_host" : row[ip_col].value }
+        else:
+            ip = None
         group = row[group_by_col].value
         if group is None:
             group = default_group
         if group not in groups.keys():
-            groups[group] = {"hosts": [], "vars": {}}
-        groups[group]["hosts"].append(host)
-        groups["_meta"]["hostvars"][row[hostname_col].value] = {}
+            #2020 change "hosts" from list to dict
+            groups[group] = {"hosts": {}, "vars": {}}
+        groups[group]["hosts"][host] = ip
+        #
+        groups["_meta"]["hostvars"][host] = {}
         for xlsx_head in rows[:1]:
             for idx, var_name in enumerate(xlsx_head):
                 if var_name.value is None:
                     var_name.value = "xlsx_" + var_name.coordinate
                 if row[idx].value is not None:
-                    groups["_meta"]["hostvars"][row[hostname_col].value][
+                    groups["_meta"]["hostvars"][host][
                         var_name.value.lower().replace(" ", "_")
                     ] = row[idx].value
 
